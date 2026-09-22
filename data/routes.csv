@@ -1,0 +1,14 @@
+origin,destination,route_code,city_pair,passenger_weight,route_weight,active
+DEL,BOM,DEL-BOM,Delhi - Mumbai,0.15,0.15,true
+DEL,BLR,DEL-BLR,Delhi - Bengaluru,0.13,0.13,true
+BOM,BLR,BOM-BLR,Mumbai - Bengaluru,0.10,0.10,true
+DEL,CCU,DEL-CCU,Delhi - Kolkata,0.08,0.08,true
+BLR,HYD,BLR-HYD,Bengaluru - Hyderabad,0.08,0.08,true
+MAA,DEL,MAA-DEL,Chennai - Delhi,0.08,0.08,true
+BOM,DEL,BOM-DEL,Mumbai - Delhi,0.07,0.07,true
+BLR,DEL,BLR-DEL,Bengaluru - Delhi,0.07,0.07,true
+HYD,DEL,HYD-DEL,Hyderabad - Delhi,0.06,0.06,true
+CCU,DEL,CCU-DEL,Kolkata - Delhi,0.05,0.05,true
+BOM,GOI,BOM-GOI,Mumbai - Goa,0.05,0.05,true
+DEL,GOI,DEL-GOI,Delhi - Goa,0.04,0.04,true
+BLR,GOI,BLR-GOI,Bengaluru - Goa,0.04,0.04,true

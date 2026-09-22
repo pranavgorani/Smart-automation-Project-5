@@ -1,0 +1,14 @@
+route,weight,category,notes
+DEL-BOM,0.15,Metro-Metro,Primary financial corridor
+DEL-BLR,0.13,Metro-Metro,Tech & business capital link
+BOM-BLR,0.10,Metro-Metro,Commercial hub pair
+DEL-CCU,0.08,Metro-Metro,North-East arterial route
+BLR-HYD,0.08,Metro-Metro,Southern IT hub connector
+MAA-DEL,0.08,Metro-Metro,Southern coastal metro link
+BOM-DEL,0.07,Metro-Metro,Reverse primary trunk route
+BLR-DEL,0.07,Metro-Metro,Reverse tech corridor
+HYD-DEL,0.06,Metro-Metro,Reverse central metro
+CCU-DEL,0.05,Metro-Metro,Reverse eastern metro
+BOM-GOI,0.05,Metro-Leisure,High-demand tourist and leisure sector
+DEL-GOI,0.04,Metro-Leisure,Capital to coastal resort
+BLR-GOI,0.04,Metro-Leisure,Southern to coastal resort
