@@ -59,18 +59,21 @@ class Settings(BaseSettings):
     @property
     def resolved_database_url(self) -> str:
         """
-        Returns DATABASE_URL if provided, else falls back to local SQLite in workspace.
-        This provides instant, zero-dependency runs while remaining 100% compatible
-        with PostgreSQL / Supabase in production.
+        Returns DATABASE_URL if provided, else falls back to local SQLite.
+        On Vercel serverless environments where root is read-only, uses /tmp/airfare_x.db.
         """
         if self.DATABASE_URL and len(self.DATABASE_URL.strip()) > 0:
             url = self.DATABASE_URL.strip()
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql://", 1)
             return url
-        
+
+        if os.environ.get("VERCEL"):
+            return "sqlite:////tmp/airfare_x.db"
+
         sqlite_path = ROOT_DIR / "airfare_x.db"
         return f"sqlite:///{sqlite_path.as_posix()}"
 
 
 settings = Settings()
+

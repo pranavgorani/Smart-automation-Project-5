@@ -4,17 +4,18 @@ Integration and API endpoint tests for AIRFARE-X INDIA.
 
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from backend.app.main import app as main_app
 
-client = TestClient(app)
+client = TestClient(main_app)
 
 
 def test_root_endpoint():
-    response = client.get("/", headers={"Accept": "application/json"})
+    response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["platform"] == "AIRFARE-X INDIA"
-    assert "documentation_url" in data
+    assert data["status"] == "online"
+    assert data["service"] == "AIRFARE-X INDIA API"
+
 
 
 def test_health_endpoint():

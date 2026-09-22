@@ -83,11 +83,12 @@ def on_startup():
     finally:
         db.close()
 
-    # Launch background scheduler
-    try:
-        start_scheduler()
-    except Exception as e:
-        logger.warning(f"Could not start background scheduler: {e}")
+    # Launch background scheduler if not in serverless environment
+    if not os.environ.get("VERCEL"):
+        try:
+            start_scheduler()
+        except Exception as e:
+            logger.warning(f"Could not start background scheduler: {e}")
 
     logger.info("AIRFARE-X INDIA is ready.")
 
@@ -95,7 +96,16 @@ def on_startup():
 @app.on_event("shutdown")
 def on_shutdown():
     logger.info("Shutting down AIRFARE-X INDIA...")
-    shutdown_scheduler()
+    if not os.environ.get("VERCEL"):
+        shutdown_scheduler()
+
+
+@app.get("/", tags=["Root"])
+def root():
+    return {
+        "status": "online",
+        "service": "AIRFARE-X INDIA API",
+    }
 
 
 @app.get("/api/info", tags=["Root"])
@@ -110,6 +120,7 @@ def api_info():
         "demo_mode": settings.is_demo_mode,
     }
 
+
 # Serve built React frontend if available
 frontend_dist = ROOT_DIR / "frontend" / "dist"
 if frontend_dist.exists():
@@ -123,16 +134,9 @@ if frontend_dist.exists():
         # Let API and docs routes pass through
         if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc") or full_path.startswith("openapi.json"):
             return None
-        
-        # If client explicitly requests application/json for root, return API info
-        if full_path == "" and "application/json" in request.headers.get("accept", ""):
-            return api_info()
 
         target_file = frontend_dist / full_path
         if target_file.is_file():
             return FileResponse(target_file)
         return FileResponse(frontend_dist / "index.html")
-else:
-    @app.get("/", tags=["Root"])
-    def root():
-        return api_info()
+
