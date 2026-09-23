@@ -5,13 +5,23 @@ Department: Data Informatics & Innovation Division (DIID)
 Theme: Smart Automation - Real-Time Airfare Price Index (APIx)
 """
 
+import sys
+import os
+from pathlib import Path
+from contextlib import asynccontextmanager
+import logging
+
+# Ensure project root is prepended to sys.path so 'backend...' imports work reliably
+# across Vercel serverless environments and local dev regardless of CWD.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-import logging
 
-from backend.app.config import settings, ROOT_DIR
+from backend.app.config import settings, ROOT_DIR, is_running_on_vercel
 from backend.app.db.database import init_db, SessionLocal
 from backend.app.ingestion.scheduler import start_scheduler, shutdown_scheduler
 
@@ -32,10 +42,67 @@ logging.basicConfig(
 )
 logger = logging.getLogger("airfare_x.main")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifecycle management:
+    - Creates database schema safely via init_db() (Base.metadata.create_all).
+    - In Vercel serverless mode: cold starts are kept lightweight (<100ms) by seeding
+      essential reference metadata (routes, airlines, sources, dgca) only if empty.
+    - In local development: auto-seeds 10,000 synthetic quotes if database is unseeded.
+    - Starts the background ingestion scheduler only in non-serverless persistent environments.
+    """
+    logger.info("Initializing AIRFARE-X INDIA Application...")
+    init_db()
+
+    # Database bootstrap check
+    db = SessionLocal()
+    try:
+        if is_running_on_vercel():
+            # Fast serverless cold start: ensure reference tables exist without heavy generation
+            from backend.app.models.route import Route
+            from backend.app.db.seed import seed_routes, seed_airlines, seed_sources, seed_dgca_reference
+            if db.query(Route).count() == 0:
+                logger.info("Vercel cold start: seeding basic reference metadata...")
+                seed_routes(db)
+                seed_airlines(db)
+                seed_sources(db)
+                seed_dgca_reference(db)
+        else:
+            # Local development: auto-seed full dataset if empty
+            from backend.app.models.airfare import AirfareQuote
+            from backend.app.db.seed import run_full_seed
+            count = db.query(AirfareQuote).count()
+            if count < 1000:
+                logger.info("Database is empty or unseeded. Triggering automatic initial bootstrap...")
+                run_full_seed(db)
+    except Exception as e:
+        logger.error(f"Startup initialization notice: {e}")
+    finally:
+        db.close()
+
+    # Launch background scheduler if not in serverless environment
+    if not is_running_on_vercel():
+        try:
+            start_scheduler()
+        except Exception as e:
+            logger.warning(f"Could not start background scheduler: {e}")
+
+    logger.info("AIRFARE-X INDIA is ready.")
+    yield
+    logger.info("Shutting down AIRFARE-X INDIA...")
+    if not is_running_on_vercel():
+        try:
+            shutdown_scheduler()
+        except Exception as e:
+            logger.warning(f"Scheduler shutdown notice: {e}")
+
+
 app = FastAPI(
-    title="AIRFARE-X INDIA API",
+    title="AIRINDEX INDIA API",
     description=(
-        "Real-Time Airfare Price Intelligence & Index Platform for MoSPI / DIID. "
+        "AIRINDEX INDIA: Real-Time Airfare Price Intelligence & Index Platform for MoSPI / DIID. "
         "Augments the Consumer Price Index (CPI) Transport/Airfare subgroup through "
         "transparent, automated data ingestion and Laspeyres-type route price relatives."
     ),
@@ -43,12 +110,29 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 # CORS Configuration
+# Supports local React, Vite, Streamlit, and Vercel preview/production domains
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8501",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8501",
+]
+if settings.CORS_ORIGINS:
+    for origin in settings.CORS_ORIGINS.split(","):
+        stripped = origin.strip()
+        if stripped and stripped not in allowed_origins:
+            allowed_origins.append(stripped)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permits local React dev, Vite, Streamlit, and preview hosts
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -64,40 +148,25 @@ app.include_router(sources_router)
 app.include_router(admin_router)
 
 
-@app.on_event("startup")
-def on_startup():
-    logger.info("Initializing AIRFARE-X INDIA Application...")
-    init_db()
-
-    # Auto-seed if database is fresh
-    db = SessionLocal()
+@app.get("/health", tags=["Root"])
+def root_health():
+    """Simple health check endpoint returning status and service name."""
+    from backend.app.db.database import engine
+    from sqlalchemy import text
+    db_connected = False
     try:
-        from backend.app.models.airfare import AirfareQuote
-        from backend.app.db.seed import run_full_seed
-        count = db.query(AirfareQuote).count()
-        if count < 1000:
-            logger.info("Database is empty or unseeded. Triggering automatic initial bootstrap...")
-            run_full_seed(db)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            db_connected = True
     except Exception as e:
-        logger.error(f"Startup initialization notice: {e}")
-    finally:
-        db.close()
+        logger.error(f"Root health check DB connectivity failure: {e}")
 
-    # Launch background scheduler if not in serverless environment
-    if not os.environ.get("VERCEL"):
-        try:
-            start_scheduler()
-        except Exception as e:
-            logger.warning(f"Could not start background scheduler: {e}")
+    return {
+        "status": "healthy" if db_connected else "degraded",
+        "service": "airindex-api",
+        "database": "connected" if db_connected else "disconnected",
+    }
 
-    logger.info("AIRFARE-X INDIA is ready.")
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    logger.info("Shutting down AIRFARE-X INDIA...")
-    if not os.environ.get("VERCEL"):
-        shutdown_scheduler()
 
 
 @app.get("/", tags=["Root"])

@@ -11,6 +11,10 @@ import os
 from backend.app.db.database import get_db
 from backend.app.config import settings
 
+import logging
+
+logger = logging.getLogger("airfare_x.health")
+
 router = APIRouter(prefix="/api/health", tags=["Health & System Telemetry"])
 
 
@@ -25,7 +29,9 @@ def check_health(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         db_latency_ms = round((time.time() - start) * 1000, 2)
     except Exception as e:
-        db_status = f"UNHEALTHY: {str(e)}"
+        logger.error(f"Database health check error: {e}")
+        db_status = "UNHEALTHY"
+
 
     # Determine overall status
     is_demo = settings.is_demo_mode
